@@ -11,7 +11,7 @@ models/
 *.pth
 *.pt
 
-# 数据集（如果你不想传上去）
+# 数据集
 datasets/
 
 # Jupyter / VSCode 配置
