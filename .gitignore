@@ -1,0 +1,20 @@
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 日志
+logs/
+*.log
+
+# 模型文件
+models/
+*.pth
+*.pt
+
+# 数据集（如果你不想传上去）
+dataset/
+
+# Jupyter / VSCode 配置
+.ipynb_checkpoints/
+.vscode/
+.idea/
