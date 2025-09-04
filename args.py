@@ -2,7 +2,7 @@ import argparse
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MedMamba training and evaluation script', add_help=False)
-    
+
     # 基础配置
     parser.add_argument('--save-name', default="Classifier", type=str,help='Name of the model to save')
     parser.add_argument('--batch-size', default=32, type=int)
@@ -24,23 +24,27 @@ def get_args_parser():
                         help='Input image channels')
     parser.add_argument('--num-classes', type=int, default=6,
                         help='Number of classes for classification head')
-    
-    # Tiny版本配置
-    parser.add_argument('--depths-t', type=list, default=[2, 2, 4, 2],
+    parser.add_argument('--depths',  type=int, nargs=4, metavar=('C1','C2','C3','C4'), default=[2, 2, 4, 2],
                         help='Depth of each stage for tiny version')
-    parser.add_argument('--dims-t', type=list, default=[96, 192, 384, 768],
+    parser.add_argument('--dims',  type=int, nargs=4, metavar=('C1','C2','C3','C4'), default=[96, 192, 384, 768],
+                        help='Dimensions of each stage for tiny version')
+
+    # Tiny版本配置
+    parser.add_argument('--depths-t',  type=int, nargs=4, metavar=('C1','C2','C3','C4'), default=[2, 2, 4, 2],
+                        help='Depth of each stage for tiny version')
+    parser.add_argument('--dims-t',  type=int, nargs=4, metavar=('C1','C2','C3','C4'), default=[96, 192, 384, 768],
                         help='Dimensions of each stage for tiny version')
     
     # Small版本配置
-    parser.add_argument('--depths-s', type=list, default=[2, 2, 8, 2],
+    parser.add_argument('--depths-s',  type=int, nargs=4, metavar=('C1','C2','C3','C4'), default=[2, 2, 8, 2],
                         help='Depth of each stage for small version')
-    parser.add_argument('--dims-s', type=list, default=[96, 192, 384, 768],
+    parser.add_argument('--dims-s',  type=int, nargs=4, metavar=('C1','C2','C3','C4'), default=[96, 192, 384, 768],
                         help='Dimensions of each stage for small version')
     
     # Base版本配置
-    parser.add_argument('--depths-b', type=list, default=[2, 2, 12, 2],
+    parser.add_argument('--depths-b',  type=int, nargs=4, metavar=('C1','C2','C3','C4'), default=[2, 2, 12, 2],
                         help='Depth of each stage for base version')
-    parser.add_argument('--dims-b', type=list, default=[128, 256, 512, 1024],
+    parser.add_argument('--dims-b',  type=int, nargs=4, metavar=('C1','C2','C3','C4'), default=[128, 256, 512, 1024],
                         help='Dimensions of each stage for base version')
 
     # HyperAD配置
@@ -48,6 +52,10 @@ def get_args_parser():
                         help='Whether to use HyperAD')
     parser.add_argument('--reduction-ratio', type=int, default=4,
                         help='Reduction ratio for HyperAD feature extraction')
+    parser.add_argument('--had-feat-dim', type=int, default=None,
+                        help='HyperAD feature_dim; default None = use embed_dim')
+    parser.add_argument('--proj-dim', type=int, default=128)
+    parser.add_argument('--p-drop', type=float, default=0.1)
 
     # EDL配置
     parser.add_argument('--EDL', default=0, type=int,

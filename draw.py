@@ -1,22 +1,31 @@
 import os
 import re
 import matplotlib.pyplot as plt
+from pathlib import Path
 
-# 自动搜索 ./logs 下的 .log 文件
-log_files = [os.path.join("./logs", f) for f in os.listdir("./logs") if f.endswith(".log")]
+# 预编译正则，快一些
+pattern = re.compile(r"train_loss:\s*([\d.]+)\s*val_accuracy:\s*([\d.]+)")
+
+log_files = [str(p) for p in Path("logs").rglob("*.log")]
 if not log_files:
-    raise FileNotFoundError("当前目录下未找到 .log 文件")
+    raise FileNotFoundError("logs 及其子目录未找到 .log 文件")
 print(log_files)
 
 for log_path in log_files:
     print(f"找到日志文件：{log_path}")
 
+    # ➜ 先确定输出 PNG 路径，并做“已存在就跳过”的判断
+    output_png = str(Path(log_path).with_suffix(".png"))
+    if os.path.exists(output_png):
+        print(f"跳过（已存在同名 PNG）：{output_png}")
+        continue
+
     train_losses, val_accuracies = [], []
 
-    # 正则提取 loss 和 accuracy
-    with open(log_path, "r", encoding="utf-8") as f:
+    # 尽量鲁棒的读取：UTF-8 为主，遇坏字节用 REPLACE，避免 UnicodeDecodeError
+    with open(log_path, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
-            m = re.search(r"train_loss:\s*([\d.]+)\s*val_accuracy:\s*([\d.]+)", line)
+            m = pattern.search(line)
             if m:
                 train_losses.append(float(m.group(1)))
                 val_accuracies.append(float(m.group(2)))
@@ -32,7 +41,7 @@ for log_path in log_files:
         train_losses, val_accuracies = train_losses[:cut], val_accuracies[:cut]
 
     # ➜ 新机制：少于 100 轮直接跳过不画
-    if len(train_losses) < 100:
+    if len(train_losses) < 80:
         print(f"跳过（未训练完成 <100 epochs）：{log_path}，仅 {len(train_losses)} 轮")
         continue
 
@@ -47,19 +56,19 @@ for log_path in log_files:
     plt.title("Training Loss over Epochs"); plt.grid(True); plt.legend()
 
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, val_accuracies, "s-", color="green", label="Validation Accuracy")
+    plt.plot(epochs, val_accuracies, "s-", label="Validation Accuracy")
     plt.xlabel("Epoch"); plt.ylabel("Accuracy")
     plt.title("Validation Accuracy over Epochs"); plt.grid(True)
 
     # 标注最高点
     max_acc = max(val_accuracies)
     max_epoch = 1 + val_accuracies.index(max_acc)
-    plt.scatter(max_epoch, max_acc, color="red", s=50, zorder=5, label="Best")
-    plt.text(max_epoch, max_acc, f"{max_acc:.3f}", ha="left", va="bottom", fontsize=9, color="red")
+    plt.scatter(max_epoch, max_acc, s=50, zorder=5, label=f"Best {max_acc:.3f}")
+    plt.text(max_epoch, max_acc, f"{max_acc:.3f}", ha="left", va="bottom", fontsize=9)
     plt.legend()
 
     plt.tight_layout()
-    output_png = log_path.replace(".log", ".png")
     plt.savefig(output_png, dpi=300)
     print(f"图像已保存为 {output_png}")
     plt.show()
+    plt.close()

@@ -229,7 +229,7 @@ class PatchExpand2D(nn.Module):
         x= self.norm(x)
 
         return x
-    
+
 
 class Final_PatchExpand2D(nn.Module):
     def __init__(self, dim, dim_scale=4, norm_layer=nn.LayerNorm):
