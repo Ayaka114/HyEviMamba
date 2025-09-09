@@ -10,6 +10,7 @@ def get_args_parser():
     parser.add_argument('--input_size', default=224, type=int, help='images input size')
     parser.add_argument('--pretrained_weights', type=str, default=None, help="Path to the pretrained model weights")
 
+
     # 模型配置
     parser.add_argument('--model', default='medmamba_t', type=str, metavar='MODEL',
                         help='Name of model to train: medmamba_t, medmamba_s, medmamba_b')
