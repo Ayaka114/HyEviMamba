@@ -9,6 +9,7 @@ import json
 import torch
 import torch.nn as nn
 from torchvision import transforms, datasets
+from torchvision.transforms import AutoAugment, AutoAugmentPolicy
 import torch.optim as optim
 from tqdm import tqdm
 from loss_evidential import EvidentialLoss,compute_uncertainty
@@ -23,17 +24,29 @@ def main():
     args = get_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("using {} device.".format(device))
-    data_transform = {
-        "train": transforms.Compose([transforms.RandomResizedCrop(224),
-                                     transforms.RandomHorizontalFlip(),
-                                     transforms.ToTensor(),
-                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]),
-        "val": transforms.Compose([transforms.Resize((224, 224)),
-                                   transforms.ToTensor(),
-                                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])}
+    if args.auto_augment:
+        print("Using AutoAugment Policy")
+        data_transform = {
+            "train": transforms.Compose([transforms.RandomResizedCrop(224),
+                                         transforms.AutoAugment(policy=AutoAugmentPolicy.IMAGENET),
+                                         transforms.RandomHorizontalFlip(),
+                                         transforms.ToTensor(),
+                                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]),
+            "val": transforms.Compose([transforms.Resize((224, 224)),
+                                       transforms.ToTensor(),
+                                       transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])}
+    else:
+        data_transform = {
+            "train": transforms.Compose([transforms.RandomResizedCrop(224),
+                                         transforms.RandomHorizontalFlip(),
+                                         transforms.ToTensor(),
+                                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]),
+            "val": transforms.Compose([transforms.Resize((224, 224)),
+                                       transforms.ToTensor(),
+                                       transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])}
     print(f"dataset:{'ours' if args.dataset == None else args.dataset}")
     if args.dataset == None:
-        train_dataset = datasets.ImageFolder(root="/home1/zhouhao/dataset/train",
+        train_dataset = datasets.ImageFolder(root="../dataset/train",
                                              transform=data_transform["train"])
         flower_list = train_dataset.class_to_idx
         cla_dict = dict((val, key) for key, val in flower_list.items())
@@ -41,7 +54,7 @@ def main():
         json_str = json.dumps(cla_dict, indent=4)
         with open('class_indices.json', 'w') as json_file:
             json_file.write(json_str)
-        validate_dataset = datasets.ImageFolder(root="/home1/zhouhao/dataset/val",
+        validate_dataset = datasets.ImageFolder(root="../dataset/val",
                                                 transform=data_transform["val"])
     elif args.dataset == "octmnist":
         npz_path = os.path.join("./datasets/octmnist", "octmnist_224.npz")
@@ -61,7 +74,7 @@ def main():
             val_ratio=0.2  # 20% 作为验证集
         )
     elif args.dataset == "messidor":
-        mat_path = "/home1/zhouhao/MedMamba_ywj/datasets/Messidor‑2/messidor/messidor+.mat"
+        mat_path = "./datasets/Messidor‑2/messidor/messidor+.mat"
         train_dataset, validate_dataset = load_messidor2_as_image(
             mat_path,
             transform_train=data_transform["train"],
@@ -139,8 +152,13 @@ def main():
 
     net.to(device)
     if args.EDL:
-        print("Using Evidential Loss")
-        loss_function = EvidentialLoss(num_classes=num_classes,adaptive=args.adaptive,c=args.c,kl_coef=min(args.kl_coef, 1.0))
+        if args.edl_mode == 'adaptive':
+            print(f"Using Evidential Loss with model{args.edl_mode}, pargams: kl_coef:{args.kl_coef},kl_scale:{args.kl_scale}")
+            loss_function = EvidentialLoss(num_classes = num_classes,kl_coef=min(args.kl_coef, 1.0),adaptive = True,c = args.kl_scale,)
+        else:
+            print(f"Using Evidential Loss with model{args.edl_mode}, pargams: kl_start:{args.kl_start}, kl_end:{args.kl_end}, kl_warmup_epochs:{args.kl_warmup_epochs}, kl_ema_beta:{args.kl_ema_beta}")
+            loss_function = EvidentialLoss(num_classes = num_classes,kl_coef=min(args.kl_coef, 1.0),adaptive = False)
+
     else:
         loss_function = nn.CrossEntropyLoss()
     optimizer = optim.Adam(net.parameters(), lr=args.lr)
@@ -149,10 +167,29 @@ def main():
     best_acc = 0.0
     save_path = './models/{}Net.pth'.format(model_name)
     train_steps = len(train_loader)
+    if args.EDL:
+        loss_function.kl_coef = min(args.kl_coef, 1.0)
 
+    kl_state = args.kl_start if args.EDL else None
     for epoch in range(epochs):
-        if args.EDL:
-            loss_function.kl_coef = min(args.kl_coef, 1.0)
+        if args.EDL and args.edl_mode != 'adaptive':
+            if args.edl_mode == 'linear':
+                if args.kl_warmup_epochs > 0:
+                    t = min(epoch, args.kl_warmup_epochs)
+                    k = args.kl_start + (args.kl_end - args.kl_start) * (t / max(1, args.kl_warmup_epochs))
+                else:
+                    k = args.kl_end
+                loss_function.kl_coef = k
+            elif args.edl_mode == 'ema':
+                # 对目标值（通常设为 kl_end）做 EMA 平滑
+                target = args.kl_end
+                beta = args.kl_ema_beta
+                kl_state = beta * kl_state + (1.0 - beta) * target
+                loss_function.kl_coef = kl_state
+                # 可选：加一个硬限幅，防止异常
+                loss_function.kl_coef = float(max(0.0, min(loss_function.kl_coef, 1.0)))
+
+
         # train
         net.train()
         running_loss = 0.0
