@@ -20,10 +20,32 @@ from sklearn.model_selection import train_test_split
 
 from dataset_class import *
 
+def load_pretrained_model(model, model_path, device='cuda'):
+    checkpoint = torch.load(model_path, map_location=device)
+
+    # 检查是否包含 'state_dict' 键
+    if 'state_dict' in checkpoint:
+        model.load_state_dict(checkpoint['state_dict'], strict=True)  # 使用 strict=True 确保完全匹配
+    else:
+        try:
+            model.load_state_dict(checkpoint, strict=True)
+        except Exception as e:
+            print(f"Loading checkpoint error: {e}. Please check the model saving format.")
+            return None
+    model.to(device)
+    model.eval()
+    print(f"Loaded pretrained model from {model_path}")
+    return model
+
+
 def main():
     args = get_args()
+
+    # 训练设备
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("using {} device.".format(device))
+
+    # mamba_x 使用 auto augment
     if args.auto_augment:
         print("Using AutoAugment Policy")
         data_transform = {
@@ -44,6 +66,8 @@ def main():
             "val": transforms.Compose([transforms.Resize((224, 224)),
                                        transforms.ToTensor(),
                                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])}
+
+    # 加载各类数据集
     print(f"dataset:{'ours' if args.dataset == None else args.dataset}")
     if args.dataset == None:
         train_dataset = datasets.ImageFolder(root="../dataset/train",
@@ -60,7 +84,6 @@ def main():
         npz_path = os.path.join("./datasets/octmnist", "octmnist_224.npz")
         train_dataset = MedMnistDataset(npz_path, split="train", transform=data_transform["train"], as_rgb=True)
         validate_dataset = MedMnistDataset(npz_path, split="val", transform=data_transform["val"], as_rgb=True)
-
     elif args.dataset == "retinamnist":
         npz_path = os.path.join("./datasets/RetinaMNIST", "retinamnist.npz")
         train_dataset = MedMnistDataset(npz_path, split="train", transform=data_transform["train"], as_rgb=True)
@@ -112,7 +135,7 @@ def main():
         train_dataset.classes = full_ds.classes
         validate_dataset.classes = full_ds.classes
 
-
+    # 创建 dataloader
     num_classes = len(train_dataset.classes)
     train_num = len(train_dataset)
     print(train_num)
@@ -122,15 +145,12 @@ def main():
     # json_str = json.dumps(cla_dict, indent=4)
     # with open('class_indices.json', 'w') as json_file:
     #     json_file.write(json_str)
-
     batch_size = args.batch_size
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers
     print('Using {} dataloader workers every process'.format(nw))
-
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size, shuffle=True,
                                                num_workers=nw)
-
     val_num = len(validate_dataset)
     validate_loader = torch.utils.data.DataLoader(validate_dataset,
                                                   batch_size=batch_size, shuffle=False,
@@ -138,19 +158,25 @@ def main():
     print("using {} images for training, {} images for validation.{} total classes.".format(train_num,
                                                                            val_num,num_classes))
 
+    # 初始化模型 （包含hyper—ad）
     model_name = args.save_name
     if args.hyper_ad:
         print(f"Using Hyper-Adaptive Mechanism with reduction_ratio: {args.reduction_ratio}; feature_dim: {args.had_feat_dim}")
-
     print(f"Model params: patch_size{args.patch_size}, in_chans({args.in_chans}), depths({args.depths}), dims({args.dims}")
     net = medmamba(num_classes=num_classes,hyper_ad=args.hyper_ad, EDL=args.EDL,
                    reduction_ratio=args.reduction_ratio,had_feature_dim=args.had_feat_dim,
                    patch_size=args.patch_size, in_chans=args.in_chans,depths=args.depths,dims=args.dims,
                    proj_dim=args.proj_dim,p_drop=args.p_drop)
 
+    if args.continue_training and args.pretrained_weights:
+        print("Continuing training from the previous model...")
+        net = load_pretrained_model(net, args.pretrained_weights, device=device)
+    else:
+        print("Training from scratch...")
     # net = medmamba(depths=[2, 2, 12, 2],dims=[128,256,512,1024],num_classes=num_classes,hyper_ad=args.hyper_ad) # medmamba_b
-
     net.to(device)
+
+    # 初始化 EDL 模块
     if args.EDL:
         if args.edl_mode == 'adaptive':
             print(f"Using Evidential Loss with model{args.edl_mode}, pargams: kl_coef:{args.kl_coef},kl_scale:{args.kl_scale}")
@@ -158,20 +184,23 @@ def main():
         else:
             print(f"Using Evidential Loss with model{args.edl_mode}, pargams: kl_start:{args.kl_start}, kl_end:{args.kl_end}, kl_warmup_epochs:{args.kl_warmup_epochs}, kl_ema_beta:{args.kl_ema_beta}")
             loss_function = EvidentialLoss(num_classes = num_classes,kl_coef=min(args.kl_coef, 1.0),adaptive = False)
-
+        loss_function.kl_coef = min(args.kl_coef, 1.0)
     else:
         loss_function = nn.CrossEntropyLoss()
+
+    # 初始化优化器
     optimizer = optim.Adam(net.parameters(), lr=args.lr)
 
+
+    # 训练主干
     epochs = args.epochs
     best_acc = 0.0
     save_path = './models/{}Net.pth'.format(model_name)
     train_steps = len(train_loader)
-    if args.EDL:
-        loss_function.kl_coef = min(args.kl_coef, 1.0)
 
     kl_state = args.kl_start if args.EDL else None
     for epoch in range(epochs):
+        # EDL 的 参数
         if args.EDL and args.edl_mode != 'adaptive':
             if args.edl_mode == 'linear':
                 if args.kl_warmup_epochs > 0:
