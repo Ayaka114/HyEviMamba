@@ -9,7 +9,7 @@ def get_args_parser():
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--input_size', default=224, type=int, help='images input size')
     parser.add_argument('--pretrained_weights', type=str, default=None, help="Path to the pretrained model weights")
-
+    parser.add_argument('--continue_training', type=bool, default=False, help="Whether to continue training from a checkpoint")
 
     # 模型配置
     parser.add_argument('--model', default='medmamba_t', type=str, metavar='MODEL',

@@ -41,7 +41,7 @@ for log_path in log_files:
         train_losses, val_accuracies = train_losses[:cut], val_accuracies[:cut]
 
     # ➜ 新机制：少于 100 轮直接跳过不画
-    if len(train_losses) < 80:
+    if len(train_losses) < 50:
         print(f"跳过（未训练完成 <100 epochs）：{log_path}，仅 {len(train_losses)} 轮")
         continue
 

@@ -12,6 +12,8 @@ CUDA_VISIBLE_DEVICES=1 python MD_train.py --batch_size 256 --epochs 100 \
 
 CUDA_VISIBLE_DEVICES=1 python MD_train.py --batch_size 256 --epochs 100 \
 --depths 2 2 4 2 --dims 96 192 384 768 \
+--hyper-ad 1 --reduction-ratio 8 --had-feat-dim 128 \
+--EDL 1 --kl-coef 5e-3 \
 --save_name mamba_t 2>&1 | tee ./logs/main/mamba_t.log
 
 
