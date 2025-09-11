@@ -1,4 +1,5 @@
 import numpy as np
+import csv
 import os
 import json
 import torch
@@ -177,8 +178,13 @@ def main():
             imgs = imgs.to(device)
             tgts = tgts.to(device)
             outputs = net(imgs)
-            probs = torch.softmax(outputs, dim=1)
-            preds = torch.argmax(probs, dim=1)
+            if args.EDL:
+                alpha = outputs + 1
+                probs = alpha / alpha.sum(dim=1, keepdim=True)
+                preds= torch.argmax(probs, dim=1)
+            else:
+                probs = torch.softmax(outputs, dim=1)
+                preds = torch.argmax(probs, dim=1)
 
             all_probs.append(probs.cpu().numpy())
             all_preds.append(preds.cpu().numpy())
@@ -191,6 +197,20 @@ def main():
 
     # 计算评估指标
     metrics = calculate_metrics(tgts_np, preds_np, probs_np)
+
+    # === 新增：保存结果到 CSV 表格 ===
+    results_file = "eval_results.csv"
+    file_exists = os.path.isfile(results_file)
+
+    with open(results_file, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["Model"] + list(metrics.keys()))
+        if not file_exists:
+            writer.writeheader()  # 只在新建文件时写表头
+        row = {"Model": args.save_name}
+        row.update(metrics)
+        writer.writerow(row)
+
+    print(f"评估结果已追加保存到 {results_file}")
 
 
 if __name__ == '__main__':
