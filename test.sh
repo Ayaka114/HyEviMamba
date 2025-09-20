@@ -1,19 +1,50 @@
-#CUDA_VISIABLE_DEVICES=0 python evaluate.py --batch_size 128 \
-#  --dims 64 128 256 512 --pretrained_weights /home/ywj/MedMamba/MedMamba_ywj/models/mambaDIM64Net.pth
+#!/bin/bash
+#set -euo pipefail
 
-CUDA_VISIBLE_DEVICES=0 python evaluate.py --batch_size 80 --epochs 100 \
---depths 2 2 12 2 --dims 128 256 512 1024 \
---pretrained_weights ./models/mamba_bNet.pth
+#MODEL_NAMES=(ASHyper1-128Net.pth  ASHyper8-96Net.pth   hyper64_EDLNet.pth  mamba_sNet.pth
+#ASHyper1-256Net.pth  Classifier_hyper_EDLNet.pth       hyper64Net.pth
+#ASHyper1-64Net.pth   Classifier_hyperNet.pth           mamba_tNet.pth
+#ASHyper1-96Net.pth   Classifier_mambaNet.pth           mamba_xNet.pth
+#ASHyper2-128Net.pth  ClassifierNet.pth
+#ASHyper2-256Net.pth
+#ASHyper2-64Net.pth
+#ASHyper2-96Net.pth
+#ASHyper4-128Net.pth      main1Net.pth
+#ASHyper4-256Net.pth      main2Net.pth
+#ASHyper4-64Net.pth       mamba_bNet.pth
+#ASHyper4-96Net.pth           mambaDEP1Net.pth
+#ASHyper8-128Net.pth          hyper128_EDLNet.pth                    mambaDIM64Net.pth
+#ASHyper8-256Net.pth          hyper_1Net.pth                         mambaPS28Net.pth
+#ASHyper8-64Net.pth           hyper_2Net.pth                         mambaPS8Net.pth
+#)
 
-CUDA_VISIBLE_DEVICES=0 python evaluate.py --batch_size 128 --epochs 100 \
---depths 2 2 8 2 --dims 96 192 384 768 \
---pretrained_weights ./models/mamba_sNet.pth
+EPOCHS=100
+BS=64
 
-CUDA_VISIBLE_DEVICES=1 python evaluate.py --batch_size 128 --epochs 100 \
---depths 2 2 4 2 --dims 96 192 384 768 \
---pretrained_weights ./models/mamba_tNet.pth
+MODEL_NAMES=(
+ASHyper8-128Net.pth
+ASHyper8-256Net.pth
+ASHyper8-64Net.pth
+ASHyper8-96Net.pth
+)
+rr=(8)
+had=(64 96 128 256)
 
-
-CUDA_VISIBLE_DEVICES=1 python evaluate.py --batch_size 128 --epochs 100 \
---depths 2 2 4 2 --dims 96 192 384 768 --auto_augment True \
---pretrained_weights ./models/mamba_xNet.pth
+# 外层循环遍历模型名称
+for NAME in "${MODEL_NAMES[@]}"; do
+  # 中层循环遍历 reduction_ratio
+  for r in "${rr[@]}"; do
+    # 内层循环遍历 had_feat_dim
+    for h in "${had[@]}"; do
+      echo ">>> Running ${r} -- ${h} -- ${NAME}"
+      CUDA_VISIBLE_DEVICES=0 python evaluate.py \
+      --EDL 0 \
+      --hyper_ad 1 \
+      --reduction_ratio ${r} --had_feat_dim ${h} \
+      --epochs ${EPOCHS} \
+      --batch_size ${BS} \
+      --save_name ${NAME} \
+      --pretrained_weights ./models/${NAME}
+    done
+  done
+done

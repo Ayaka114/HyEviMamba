@@ -13,6 +13,7 @@ models/
 
 # 数据集
 datasets/
+eval_results.csv
 
 # Jupyter / VSCode 配置
 .ipynb_checkpoints/
