@@ -700,7 +700,7 @@ class VSSLayer_up(nn.Module):
 class RawImageHyperADExtractor(nn.Module):
     """
     按照图中结构实现的超网络动态特征提取器（Hyper AD Plug-in）
-    包括：参数生成 -> 下采样 -> SwiGLU -> 上采样 -> 动态特征
+    包括：参数生成 -> 下采样 -> SiLUFeedForward -> 上采样 -> 动态特征
     """
 
     def __init__(self, in_channels=3, feature_dim=64, reduction_ratio=4):
@@ -734,7 +734,7 @@ class RawImageHyperADExtractor(nn.Module):
         )
 
         # SwiGLU激活
-        self.swiglu = nn.Sequential(
+        self.SiLUFeedForward = nn.Sequential(
             nn.LayerNorm(self.reduced_dim),
             nn.Linear(self.reduced_dim, self.reduced_dim),
             nn.SiLU(),
@@ -772,7 +772,7 @@ class RawImageHyperADExtractor(nn.Module):
         features_down = features_down.reshape(B, H, W, self.reduced_dim)  # B,H,W,R
 
         # SwiGLU激活
-        features_processed = self.swiglu(features_down)  # B,H,W,R
+        features_processed = self.SiLUFeedForward(features_down)  # B,H,W,R
 
         # 参数生成 (Parameter Generation) - Upsample路径
         features_down_mean = torch.mean(features_processed.reshape(B, -1, self.reduced_dim), dim=1)  # B,R
@@ -965,7 +965,6 @@ class VSSM(nn.Module):
         return {'relative_position_bias_table'}
 
     def forward_backbone(self, x):
-
         # 正常的特征提取流程
         x = self.patch_embed(x)
         if self.ape:

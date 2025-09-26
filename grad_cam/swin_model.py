@@ -13,7 +13,6 @@ import torch.utils.checkpoint as checkpoint
 import numpy as np
 from typing import Optional
 
-
 def drop_path_f(x, drop_prob: float = 0., training: bool = False):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
 

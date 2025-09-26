@@ -10,7 +10,7 @@ logs/
 models/
 *.pth
 *.pt
-
+tsne_out/
 # 数据集
 datasets/
 eval_results.csv

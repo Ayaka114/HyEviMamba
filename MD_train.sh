@@ -10,7 +10,8 @@ CUDA_VISIBLE_DEVICES=0 python MD_train.py --batch-size 128 --epochs 150 \
 --save-name main1 2>&1 | tee ./logs/main/main1.log
 
 CUDA_VISIBLE_DEVICES=1 python MD_train.py --batch-size 128 --epochs 100 \
---hyper-ad 1 --reduction-ratio 8 --had-feat-dim 96 \
+--depths 2 2 8 2 --dims 96 192 384 768 \
+--hyper-ad 1 --reduction-ratio 4 --had-feat-dim 128 \
 --EDL 1 --kl-coef 5e-3 \
 --save-name main2 2>&1 | tee ./logs/main/main2.log
 
